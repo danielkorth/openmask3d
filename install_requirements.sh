@@ -1,5 +1,8 @@
 set -e
 
+# Use correct nvcc
+export PATH=/usr/local/cuda/bin:$PATH
+
 # OpenMask3D Installation
 #   - If you encounter any problem with the Detectron2 or MinkowskiEngine installations, 
 #     it might be because you don't have properly set up gcc, g++, pybind11, openblas installations.
@@ -19,7 +22,10 @@ pip install antlr4-python3-runtime==4.8 black==21.4b2 omegaconf==2.0.6 hydra-cor
 pip install 'git+https://github.com/facebookresearch/detectron2.git@710e7795d0eeadf9def0e7ef957eea13532e34cf' --no-deps
 
 conda install -y openblas-devel -c anaconda
-pip install -U git+https://github.com/NVIDIA/MinkowskiEngine -v --no-deps --config-settings="--blas_include_dirs=${CONDA_PREFIX}/include" --config-settings="--blas=openblas" 
+#pip install -U git+https://github.com/NVIDIA/MinkowskiEngine -v --no-deps --config-settings="--blas_include_dirs=${CONDA_PREFIX}/include" --config-settings="--blas=openblas" 
+
+git clone https://github.com/NVIDIA/MinkowskiEngine.git
+cd MinkowskiEngine && python setup.py install --blas_include_dirs=${CONDA_PREFIX}/include --blas=openblas && cd ..
 
 pip install pynvml==11.4.1 gpustat==1.0.0 tabulate==0.9.0 pytest==7.2.0 tensorboardx==2.5.1 yapf==0.32.0 termcolor==2.1.1 addict==2.4.0 blessed==1.19.1
 pip install gorilla-core==0.2.7.8

@@ -24,7 +24,7 @@ pip install 'git+https://github.com/facebookresearch/detectron2.git@710e7795d0ee
 conda install -y openblas-devel -c anaconda
 #pip install -U git+https://github.com/NVIDIA/MinkowskiEngine -v --no-deps --config-settings="--blas_include_dirs=${CONDA_PREFIX}/include" --config-settings="--blas=openblas" 
 
-git clone https://github.com/NVIDIA/MinkowskiEngine.git
+if cd MinkowskiEngine; then git pull; else git clone https://github.com/NVIDIA/MinkowskiEngine.git; fi
 cd MinkowskiEngine && python setup.py install --blas_include_dirs=${CONDA_PREFIX}/include --blas=openblas && cd ..
 
 pip install pynvml==11.4.1 gpustat==1.0.0 tabulate==0.9.0 pytest==7.2.0 tensorboardx==2.5.1 yapf==0.32.0 termcolor==2.1.1 addict==2.4.0 blessed==1.19.1

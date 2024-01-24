@@ -70,9 +70,9 @@ def main():
     # --------------------------------
     # Set the paths
     # --------------------------------
-    path_scene_pcd = "data/scene_example.ply"
-    path_pred_masks = "data/scene_example_masks.pt"
-    path_openmask3d_features = "data/scene_example_openmask3d_features.npy"
+    path_scene_pcd = "/home/ml3d/openmask3d/resources/scene_example_scannet++/scene_example.ply"
+    path_pred_masks = "/home/ml3d/openmask3d/output/2024-01-24-16-21-56-experiment/scene_example_masks.pt"
+    path_openmask3d_features = "/home/ml3d/openmask3d/output/2024-01-24-16-21-56-experiment/scene_example_openmask3d_features.npy"
     
 
     # --------------------------------
@@ -94,7 +94,7 @@ def main():
     # --------------------------------
     # Set the query text
     # --------------------------------
-    query_text = "ENTER QUERY TEXT HERE" # change the query text here
+    query_text = "table" # change the query text here
 
 
     # --------------------------------
@@ -115,7 +115,9 @@ def main():
     scene_pcd_w_sim_colors.points = scene_pcd.points
     scene_pcd_w_sim_colors.colors = o3d.utility.Vector3dVector(per_point_similarity_colors)
     scene_pcd_w_sim_colors.estimate_normals()
-    o3d.visualization.draw_geometries([scene_pcd_w_sim_colors])
+
+    # downsampled = o3d.geometry.voxel_down_sample(scene_pcd_w_sim_colors, 0.01)
+    o3d.visualization.draw_geometries([scene_pcd_w_sim_colors.voxel_down_sample(0.01)])
     # alternatively, you can save the scene_pcd_w_sim_colors as a .ply file
     # o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
 

@@ -1,0 +1,6 @@
+*.png
+*.jpg
+resources
+output
+*.pyc
+*.pyo

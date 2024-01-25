@@ -70,9 +70,9 @@ def main():
     # --------------------------------
     # Set the paths
     # --------------------------------
-    path_scene_pcd = "/home/ml3d/openmask3d/resources/scene_example_scannet++/scene_example.ply"
-    path_pred_masks = "/home/ml3d/openmask3d/output/2024-01-24-16-21-56-experiment/scene_example_masks.pt"
-    path_openmask3d_features = "/home/ml3d/openmask3d/output/2024-01-24-16-21-56-experiment/scene_example_openmask3d_features.npy"
+    path_scene_pcd = "/home/ml3d/openmask3d/resources/41b00feddb/scene_example.ply"
+    path_pred_masks = "/home/ml3d/openmask3d/output/2024-01-25-18-43-39-experiment/scene_example_masks.pt"
+    path_openmask3d_features = "/home/ml3d/openmask3d/output/2024-01-25-18-43-39-experiment/scene_example_openmask3d_features.npy"
     
 
     # --------------------------------

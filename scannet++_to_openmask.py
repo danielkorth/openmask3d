@@ -3,6 +3,7 @@ import shutil
 import argparse
 import json
 import numpy as np
+from PIL import Image
 
 def copy_files(source, destination):
     """
@@ -60,7 +61,7 @@ def rename_files(directory):
     for new_name, file in enumerate(filtered_files):
         os.rename(os.path.join(directory, file), os.path.join(directory, f"{new_name}.{suffix}"))
 
-def process_scene(scene_id):
+def process_scene(scene_id, resize_factor):
     """
     Process a given scene ID.
     """
@@ -78,6 +79,18 @@ def process_scene(scene_id):
     dest_rgb = f"/home/ml3d/openmask3d/resources/{scene_id}/color"
     copy_files(source_rgb, dest_rgb)
 
+    # check if both img dims are divisible by 4, resize if so by bicubic interpolation
+    for file_name in os.listdir(dest_rgb):
+        full_file_name = os.path.join(dest_rgb, file_name)
+        if os.path.isfile(full_file_name):
+            img = Image.open(full_file_name)
+            width, height = img.size
+            if not width % resize_factor == 0 or not height % resize_factor == 0:
+                raise ValueError(f"Image dimensions are not divisible by {resize_factor}.")
+            else:
+                img = img.resize((width // resize_factor, height // resize_factor))
+                img.save(full_file_name)
+
     # Move iPhone depth data
     source_depth = f"/home/data_hdd/scannet/data/{scene_id}/iphone/depth"
     dest_depth = f"/home/ml3d/openmask3d/resources/{scene_id}/depth"
@@ -93,6 +106,12 @@ def process_scene(scene_id):
     intrinsic_matrix = np.vstack([intrinsic_matrix, [0, 0, 0]])
     intrinsic_matrix = np.hstack([intrinsic_matrix, [[0], [0], [0], [1]]])
 
+    # update the intrinsic matrix to account for downsampling: DONE LATER IN THE ORIGINAL SCRIPT
+    # intrinsic_matrix[0, 0] /= resize_factor
+    # intrinsic_matrix[1, 1] /= resize_factor
+    # intrinsic_matrix[0, 2] /= resize_factor
+    # intrinsic_matrix[1, 2] /= resize_factor
+    
     intrinsic_dir = f"/home/ml3d/openmask3d/resources/{scene_id}/intrinsic"
     # Save the intrinsic matrix to a file
     os.makedirs(intrinsic_dir, exist_ok=True)
@@ -112,6 +131,10 @@ def process_scene(scene_id):
     # Rename files in depth directory
     depth_directory = f'/home/ml3d/openmask3d/resources/{scene_id}/depth'
     rename_files(depth_directory)
+    # delate the old frame* files   
+    for file in os.listdir(depth_directory):
+        if file.startswith('frame_'):
+            os.remove(os.path.join(depth_directory, file))
 
     # Rename files in color directory
     color_directory = f'/home/ml3d/openmask3d/resources/{scene_id}/color'
@@ -123,10 +146,12 @@ def main():
     Main function to process the input arguments.
     """
     parser = argparse.ArgumentParser(description='Process ScanNet++ data for OpenMask3D.')
-    parser.add_argument('--scene_id', type=str, required=True, help='The Scene ID to process.')
-    
+    parser.add_argument('--scene_id', type=str, required=True, help='The Scene ID to process.')    
+    parser.add_argument('--resize_factor', type=int, default=4, help='The factor by which to downsample the images.')
+
+
     args = parser.parse_args()
-    process_scene(args.scene_id)
+    process_scene(args.scene_id, args.resize_factor)
 
 if __name__ == "__main__":
     main()

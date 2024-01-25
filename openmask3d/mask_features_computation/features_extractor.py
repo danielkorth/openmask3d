@@ -7,6 +7,8 @@ from tqdm import tqdm
 import os
 from openmask3d.data.load import Camera, InstanceMasks3D, Images, PointCloud, get_number_of_images
 from openmask3d.mask_features_computation.utils import initialize_sam_model, mask2box_multi_level, run_sam
+from PIL import Image
+import matplotlib.pyplot as plt
 
 class PointProjector:
     def __init__(self, camera: Camera, 
@@ -145,6 +147,12 @@ class FeaturesExtractor:
                 # Get original mask points coordinates in 2d images
                 point_coords = np.transpose(np.where(self.point_projector.visible_points_in_view_in_mask[view][mask] == True))
                 if (point_coords.shape[0] > 0):
+                    # # plot the view
+                    # plt.imshow(np_images[view])
+                    # plt.show()
+
+
+
                     self.predictor_sam.set_image(np_images[view])
                     
                     # SAM
@@ -154,6 +162,15 @@ class FeaturesExtractor:
                                         point_coords=point_coords,
                                         predictor_sam=self.predictor_sam,)
                     
+                    # save best mask similar to crops below
+                    # show image and mask next to it using subplot
+                    # fig, axs = plt.subplots(1, 2)
+                    # axs[0].imshow(np_images[view])
+                    # axs[1].imshow(best_mask)
+                    # plt.show()
+                    
+                    
+
                     # MULTI LEVEL CROPS
                     for level in range(num_levels):
                         # get the bbox and corresponding crops

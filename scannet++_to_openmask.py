@@ -5,6 +5,9 @@ import json
 import numpy as np
 from PIL import Image
 
+openmask3d_base_dir = "/home/ml3d/openmask3d"
+scannet_base_dir = "/home/data_hdd/scannet/data"
+
 def copy_files(source, destination):
     """
     Copy files from source to destination.
@@ -67,16 +70,16 @@ def process_scene(scene_id, resize_factor):
     """
 
     # make scene dir
-    os.makedirs(f"/home/ml3d/openmask3d/resources/{scene_id}", exist_ok=True)
+    os.makedirs(f"{openmask3d_base_dir}/resources/{scene_id}", exist_ok=True)
 
     # Move point cloud data
-    source_pcl = f"/home/data_hdd/scannet/data/{scene_id}/scans/mesh_aligned_0.05.ply"
-    dest_pcl = f"/home/ml3d/openmask3d/resources/{scene_id}/scene_example.ply"
+    source_pcl = f"{scannet_base_dir}/{scene_id}/scans/mesh_aligned_0.05.ply"
+    dest_pcl = f"{openmask3d_base_dir}/resources/{scene_id}/scene_example.ply"
     shutil.copy(source_pcl, dest_pcl)
 
     # Move iPhone camera images
-    source_rgb = f"/home/data_hdd/scannet/data/{scene_id}/iphone/rgb"
-    dest_rgb = f"/home/ml3d/openmask3d/resources/{scene_id}/color"
+    source_rgb = f"{scannet_base_dir}/{scene_id}/iphone/rgb"
+    dest_rgb = f"{openmask3d_base_dir}/resources/{scene_id}/color"
     copy_files(source_rgb, dest_rgb)
 
     # check if both img dims are divisible by 4, resize if so by bicubic interpolation
@@ -92,12 +95,12 @@ def process_scene(scene_id, resize_factor):
                 img.save(full_file_name)
 
     # Move iPhone depth data
-    source_depth = f"/home/data_hdd/scannet/data/{scene_id}/iphone/depth"
-    dest_depth = f"/home/ml3d/openmask3d/resources/{scene_id}/depth"
+    source_depth = f"{scannet_base_dir}/{scene_id}/iphone/depth"
+    dest_depth = f"{openmask3d_base_dir}/resources/{scene_id}/depth"
     copy_files(source_depth, dest_depth)
 
     # Extract intrinsic camera parameters
-    intrinsic_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
+    intrinsic_file = f"{scannet_base_dir}/{scene_id}/iphone/pose_intrinsic_imu.json"
     with open(intrinsic_file, 'r') as file:
         data = json.load(file)
 
@@ -106,13 +109,7 @@ def process_scene(scene_id, resize_factor):
     intrinsic_matrix = np.vstack([intrinsic_matrix, [0, 0, 0]])
     intrinsic_matrix = np.hstack([intrinsic_matrix, [[0], [0], [0], [1]]])
 
-    # update the intrinsic matrix to account for downsampling: DONE LATER IN THE ORIGINAL SCRIPT
-    # intrinsic_matrix[0, 0] /= resize_factor
-    # intrinsic_matrix[1, 1] /= resize_factor
-    # intrinsic_matrix[0, 2] /= resize_factor
-    # intrinsic_matrix[1, 2] /= resize_factor
-    
-    intrinsic_dir = f"/home/ml3d/openmask3d/resources/{scene_id}/intrinsic"
+    intrinsic_dir = f"{openmask3d_base_dir}/resources/{scene_id}/intrinsic"
     # Save the intrinsic matrix to a file
     os.makedirs(intrinsic_dir, exist_ok=True)
     intrinsic_matrix_file = f"{intrinsic_dir}/intrinsic_color.txt"
@@ -120,26 +117,24 @@ def process_scene(scene_id, resize_factor):
         for row in intrinsic_matrix:
             file.write(' '.join(map(str, row)) + '\n')
 
-
     # Extract aligned pose
-    pose_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
-    output_dir = f"/home/ml3d/openmask3d/resources/{scene_id}/pose"
+    pose_file = f"{scannet_base_dir}/{scene_id}/iphone/pose_intrinsic_imu.json"
+    output_dir = f"{openmask3d_base_dir}/resources/{scene_id}/pose"
     os.makedirs(output_dir, exist_ok=True)
 
     extract_aligned_pose(pose_file, output_dir)
 
     # Rename files in depth directory
-    depth_directory = f'/home/ml3d/openmask3d/resources/{scene_id}/depth'
+    depth_directory = f'{openmask3d_base_dir}/resources/{scene_id}/depth'
     rename_files(depth_directory)
-    # delate the old frame* files   
+    # delete the old frame* files   
     for file in os.listdir(depth_directory):
         if file.startswith('frame_'):
             os.remove(os.path.join(depth_directory, file))
 
     # Rename files in color directory
-    color_directory = f'/home/ml3d/openmask3d/resources/{scene_id}/color'
+    color_directory = f'{openmask3d_base_dir}/resources/{scene_id}/color'
     rename_files(color_directory)
-
 
 def main():
     """

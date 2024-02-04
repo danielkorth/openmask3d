@@ -1,8 +1,9 @@
 #!/bin/bash
 export OMP_NUM_THREADS=3  # speeds up MinkowskiEngine
+
 set -e
 
-
+# export CUDA_VISIBLE_DEVICES=1 # set to -1 to use CPU
 
 # parse argument
 if [ "$#" -ne 1 ]; then
@@ -10,7 +11,6 @@ if [ "$#" -ne 1 ]; then
     echo "Example: $0 scene0000_00" >&2
     exit 1
 fi
-
 
 # RUN OPENMASK3D FOR A SINGLE SCENE
 # This script performs the following:

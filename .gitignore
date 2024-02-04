@@ -4,3 +4,10 @@ resources
 output
 *.pyc
 *.pyo
+*.o
+openmask3d/class_agnostic_mask_computation
+openmask3d/saved
+*.ply
+*.ipynb
+tmp_scannet++/
+*.egg-info

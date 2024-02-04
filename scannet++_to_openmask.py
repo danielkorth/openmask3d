@@ -38,7 +38,8 @@ def extract_aligned_pose(json_file, output_directory):
 
         # invert pose
         aligned_pose = np.array(aligned_pose)
-        aligned_pose = np.linalg.inv(aligned_pose)
+        # aligned_pose[:, [0,1]] = -aligned_pose[:, [0,1]]
+        # aligned_pose = np.linalg.inv(aligned_pose)
 
 
         with open(f'{output_directory}/{frame_number}.txt', 'w') as output_file:
@@ -61,22 +62,24 @@ def rename_files(directory):
     for new_name, file in enumerate(filtered_files):
         os.rename(os.path.join(directory, file), os.path.join(directory, f"{new_name}.{suffix}"))
 
-def process_scene(scene_id, resize_factor):
+def process_scene(scene_id, resize_factor, downsample):
     """
     Process a given scene ID.
     """
 
+    dest_folder = scene_id if not downsample else f"{scene_id}_downsampled"
+
     # make scene dir
-    os.makedirs(f"/home/ml3d/openmask3d/resources/{scene_id}", exist_ok=True)
+    os.makedirs(f"/home/ml3d/openmask3d/resources/{dest_folder}", exist_ok=True)
 
     # Move point cloud data
     source_pcl = f"/home/data_hdd/scannet/data/{scene_id}/scans/mesh_aligned_0.05.ply"
-    dest_pcl = f"/home/ml3d/openmask3d/resources/{scene_id}/scene_example.ply"
+    dest_pcl = f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply"
     shutil.copy(source_pcl, dest_pcl)
 
     # Move iPhone camera images
     source_rgb = f"/home/data_hdd/scannet/data/{scene_id}/iphone/rgb"
-    dest_rgb = f"/home/ml3d/openmask3d/resources/{scene_id}/color"
+    dest_rgb = f"/home/ml3d/openmask3d/resources/{dest_folder}/color"
     copy_files(source_rgb, dest_rgb)
 
     # check if both img dims are divisible by 4, resize if so by bicubic interpolation
@@ -85,6 +88,7 @@ def process_scene(scene_id, resize_factor):
         if os.path.isfile(full_file_name):
             img = Image.open(full_file_name)
             width, height = img.size
+            # print(f"Image dimensions: {width}x{height}")
             if not width % resize_factor == 0 or not height % resize_factor == 0:
                 raise ValueError(f"Image dimensions are not divisible by {resize_factor}.")
             else:
@@ -93,8 +97,19 @@ def process_scene(scene_id, resize_factor):
 
     # Move iPhone depth data
     source_depth = f"/home/data_hdd/scannet/data/{scene_id}/iphone/depth"
-    dest_depth = f"/home/ml3d/openmask3d/resources/{scene_id}/depth"
+    dest_depth = f"/home/ml3d/openmask3d/resources/{dest_folder}/depth"
     copy_files(source_depth, dest_depth)
+
+    # resize depth images to match the resized rgb images
+    for file_name in os.listdir(dest_depth):
+        full_file_name = os.path.join(dest_depth, file_name)
+        if os.path.isfile(full_file_name):
+            img = Image.open(full_file_name)
+            width, height = (480,360)
+            # print(f"Image dimensions: {width}x{height}")
+            img = img.resize((width, height), Image.NEAREST)
+            img.save(full_file_name)
+
 
     # Extract intrinsic camera parameters
     intrinsic_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
@@ -112,7 +127,7 @@ def process_scene(scene_id, resize_factor):
     # intrinsic_matrix[0, 2] /= resize_factor
     # intrinsic_matrix[1, 2] /= resize_factor
     
-    intrinsic_dir = f"/home/ml3d/openmask3d/resources/{scene_id}/intrinsic"
+    intrinsic_dir = f"/home/ml3d/openmask3d/resources/{dest_folder}/intrinsic"
     # Save the intrinsic matrix to a file
     os.makedirs(intrinsic_dir, exist_ok=True)
     intrinsic_matrix_file = f"{intrinsic_dir}/intrinsic_color.txt"
@@ -123,13 +138,13 @@ def process_scene(scene_id, resize_factor):
 
     # Extract aligned pose
     pose_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
-    output_dir = f"/home/ml3d/openmask3d/resources/{scene_id}/pose"
+    output_dir = f"/home/ml3d/openmask3d/resources/{dest_folder}/pose"
     os.makedirs(output_dir, exist_ok=True)
 
     extract_aligned_pose(pose_file, output_dir)
 
     # Rename files in depth directory
-    depth_directory = f'/home/ml3d/openmask3d/resources/{scene_id}/depth'
+    depth_directory = f'/home/ml3d/openmask3d/resources/{dest_folder}/depth'
     rename_files(depth_directory)
     # delate the old frame* files   
     for file in os.listdir(depth_directory):
@@ -137,8 +152,33 @@ def process_scene(scene_id, resize_factor):
             os.remove(os.path.join(depth_directory, file))
 
     # Rename files in color directory
-    color_directory = f'/home/ml3d/openmask3d/resources/{scene_id}/color'
+    color_directory = f'/home/ml3d/openmask3d/resources/{dest_folder}/color'
     rename_files(color_directory)
+
+    if downsample:
+        # Downsample rgb, depth and pose data to 50 imgs
+        rgb_files = sorted(os.listdir(color_directory), key=lambda x: int(x.split('.')[0]))
+        depth_files = sorted(os.listdir(depth_directory), key=lambda x: int(x.split('.')[0]))
+        pose_files = sorted(os.listdir(output_dir), key=lambda x: int(x.split('.')[0]))
+
+        for file in rgb_files[50:]:
+            os.remove(os.path.join(color_directory, file))
+        for file in depth_files[50:]:
+            os.remove(os.path.join(depth_directory, file))
+        for file in pose_files[50:]:
+            os.remove(os.path.join(output_dir, file))
+
+
+        # downsample the point cloud by open3d
+        pcl_file = f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply"
+        import open3d as o3d
+        pcd = o3d.io.read_point_cloud(pcl_file)
+        downsampled_pcd = pcd.voxel_down_sample(voxel_size=0.05)
+        o3d.io.write_point_cloud(f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply", downsampled_pcd)
+
+        
+
+    print(f"Scene {scene_id} processed successfully.")
 
 
 def main():
@@ -146,12 +186,12 @@ def main():
     Main function to process the input arguments.
     """
     parser = argparse.ArgumentParser(description='Process ScanNet++ data for OpenMask3D.')
-    parser.add_argument('--scene_id', type=str, required=True, help='The Scene ID to process.')    
+    parser.add_argument('--scene_id', type=str, default='41b00feddb', help='The Scene ID to process.')    
     parser.add_argument('--resize_factor', type=int, default=4, help='The factor by which to downsample the images.')
-
+    parser.add_argument('--downsample', action='store_true', help='Whether to downsample the images.')
 
     args = parser.parse_args()
-    process_scene(args.scene_id, args.resize_factor)
+    process_scene(args.scene_id, args.resize_factor, args.downsample)
 
 if __name__ == "__main__":
     main()

@@ -56,7 +56,7 @@ def main(ctx: DictConfig):
 
     # 5. Run extractor
     features_extractor = FeaturesExtractor(camera=camera, 
-                                           clip_model=ctx.external.clip_model, 
+                                           embedding_name=ctx.external.embedding_model, 
                                            images=images, 
                                            masks=masks,
                                            pointcloud=pointcloud, 

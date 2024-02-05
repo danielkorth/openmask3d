@@ -5,6 +5,9 @@ import json
 import numpy as np
 from PIL import Image
 
+openmask3d_base_dir = "/home/ml3d/openmask3d"
+scannet_base_dir = "/home/data_hdd/scannet/data"
+
 def copy_files(source, destination):
     """
     Copy files from source to destination.
@@ -112,7 +115,7 @@ def process_scene(scene_id, resize_factor, downsample):
 
 
     # Extract intrinsic camera parameters
-    intrinsic_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
+    intrinsic_file = f"{scannet_base_dir}/{scene_id}/iphone/pose_intrinsic_imu.json"
     with open(intrinsic_file, 'r') as file:
         data = json.load(file)
 
@@ -135,7 +138,6 @@ def process_scene(scene_id, resize_factor, downsample):
         for row in intrinsic_matrix:
             file.write(' '.join(map(str, row)) + '\n')
 
-
     # Extract aligned pose
     pose_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
     output_dir = f"/home/ml3d/openmask3d/resources/{dest_folder}/pose"
@@ -146,7 +148,7 @@ def process_scene(scene_id, resize_factor, downsample):
     # Rename files in depth directory
     depth_directory = f'/home/ml3d/openmask3d/resources/{dest_folder}/depth'
     rename_files(depth_directory)
-    # delate the old frame* files   
+    # delete the old frame* files   
     for file in os.listdir(depth_directory):
         if file.startswith('frame_'):
             os.remove(os.path.join(depth_directory, file))

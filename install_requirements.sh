@@ -55,3 +55,4 @@ pip install git+https://github.com/openai/CLIP.git@a9b1bf5920416aaeaec965c25dd9e
 pip install  git+https://github.com/facebookresearch/segment-anything.git@6fdee8f2727f4506cfbbe553e23b895e27956588 --no-deps
 pip install ftfy==6.1.1
 pip install regex==2023.10.3
+pip install transformers

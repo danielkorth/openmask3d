@@ -13,6 +13,7 @@ def main(ctx: DictConfig):
 
     device = "cpu" 
     device = get_free_gpu(min_mem=7000) if torch.cuda.is_available() else device
+    device = "cuda:0"
     print(f"Using device: {device}")
     
     out_folder = ctx.output.output_directory
@@ -55,7 +56,7 @@ def main(ctx: DictConfig):
 
     # 5. Run extractor
     features_extractor = FeaturesExtractor(camera=camera, 
-                                           clip_model=ctx.external.clip_model, 
+                                           embedding_name=ctx.external.embedding_model, 
                                            images=images, 
                                            masks=masks,
                                            pointcloud=pointcloud, 

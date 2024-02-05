@@ -1,4 +1,5 @@
 import numpy as np
+from omegaconf import OmegaConf
 import open3d as o3d
 import torch
 import clip
@@ -70,9 +71,13 @@ def main():
     # --------------------------------
     # Set the paths
     # --------------------------------
-    path_scene_pcd = "/home/ml3d/openmask3d/resources/41b00feddb/scene_example.ply"
-    path_pred_masks = "/home/ml3d/openmask3d/output/2024-01-25-18-43-39-experiment/scene_example_masks.pt"
-    path_openmask3d_features = "/home/ml3d/openmask3d/output/2024-01-25-18-43-39-experiment/scene_example_openmask3d_features.npy"
+    experiment_path = "/home/ml3d/openmask3d_daniel/output/2024-02-05-10-51-50-experiment"
+
+    path_pred_masks = f"{experiment_path}/scene_example_masks.pt"
+    path_openmask3d_features = f"{experiment_path}/scene_example_openmask3d_features.npy"
+    config_file = f"{experiment_path}/hydra_outputs/mask_features_computation/.hydra/config.yaml"
+    ctx = OmegaConf.load(config_file)
+    path_scene_pcd = ctx.data.point_cloud_path
     
 
     # --------------------------------

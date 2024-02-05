@@ -67,7 +67,7 @@ class QuerySimilarityComputation():
             elif agg_fct == 'max':
                 scores[mask_idx] = np.nanmean(normalized_emb@text_emb)
             else:
-                raise Exception("please provide a valid aggregation function.")
+                raise ValueError("provide a valid aggregation function.")
             
         # np.save("/home/ml3d/openmask3d_daniel/distances/dist.npz", np.concatenate(dist_matrix))
             # if isinstance(self.embedding_model, SigLIPModel):
@@ -122,16 +122,11 @@ class QuerySimilarityComputation():
 
 
 def main(args):
-    parser = argparse.ArgumentParser()
-
-    print(args.remove_outliers)
-    print(args.agg_fct)
     # --------------------------------
     # Set the paths
     # --------------------------------
     # with crops
     experiment_path = "/home/ml3d/openmask3d_daniel/output/2024-02-05-14-43-22-experiment/"
-
     path_pred_masks = f"{experiment_path}/scene_example_masks.pt"
     path_openmask3d_features = f"{experiment_path}/scene_example_openmask3d_features.npy"
     config_file = f"{experiment_path}/hydra_outputs/mask_features_computation/.hydra/config.yaml"
@@ -139,7 +134,7 @@ def main(args):
     path_scene_pcd = ctx.data.point_cloud_path
 
 
-    embedding_name: Embedders = ctx.external.embedding_model
+    embedding_name: Embedders = ctx.external.embedding_model if ctx.external.embedding_model else 'clip'
     device =  torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(f"Using device: {device}")
     if embedding_name == "clip":
@@ -183,7 +178,8 @@ def main(args):
     elif args.image_path:
         query_image = Image.open(args.image_path)
         # get the per mask similarity scores, i.e. the cosine similarity between the query embedding and each openmask3d mask-feature for each object instance
-        per_mask_query_sim_scores = query_similarity_computer.compute_similarity_scores_for_images(openmask3d_features, query_image, remove_outliers=args.remove_outliers, agg_fct=args.agg_fct))
+        per_mask_query_sim_scores = query_similarity_computer.compute_similarity_scores_for_images(openmask3d_features, query_image,
+                                                                                                remove_outliers=args.remove_outliers, agg_fct=args.agg_fct)
     else:
         raise ValueError("Please provide either a text or an image query")
     
@@ -205,12 +201,12 @@ def main(args):
     # downsampled = o3d.geometry.voxel_down_sample(scene_pcd_w_sim_colors, 0.01)
     # o3d.visualization.draw_geometries([scene_pcd_w_sim_colors.voxel_down_sample(0.01)])
     # alternatively, you can save the scene_pcd_w_sim_colors as a .ply file
-    o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
+    o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}1.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Query Similarity Computation')
     parser.add_argument('-e', '--experiment_path', type=str, help='Path to the experiment folder')
-    parser.add_argument('-t', '--text', type=str, help='Query text')
+    parser.add_argument('-t', '--text', type=str, default='table', help='Query text')
     parser.add_argument('-i', '--image_path', type=str, help='Query image path')
     parser.add_argument('--remove_outliers', type=bool, default=False, help='Whether to remove outliers or not')
     parser.add_argument('--agg_fct', type=str, default='mean', help='Aggregation function for feature embeddings')

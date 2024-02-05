@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 from omegaconf import OmegaConf
 import open3d as o3d
 import torch
@@ -6,6 +7,8 @@ import clip
 import pdb
 import matplotlib.pyplot as plt
 from constants import *
+from sklearn.cluster import DBSCAN
+from scipy.spatial.distance import pdist, squareform
 
 
 class QuerySimilarityComputation():
@@ -21,16 +24,41 @@ class QuerySimilarityComputation():
         sentence_embedding_normalized =  (sentence_embedding/sentence_embedding.norm(dim=-1, keepdim=True)).float().cpu()
         return sentence_embedding_normalized.squeeze().numpy()
  
-    def compute_similarity_scores(self, mask_features, text_query):
+    def compute_similarity_scores(self, mask_features, text_query, remove_outliers=False, agg_fct='mean'):
+        dist_matrix = list()
         text_emb = self.get_query_embedding(text_query)
 
         scores = np.zeros(len(mask_features))
         for mask_idx, mask_emb in enumerate(mask_features):
-            mask_norm = np.linalg.norm(mask_emb)
-            if mask_norm < 0.001:
+            mask_norm = np.linalg.norm(mask_emb, axis=1, keepdims=True)
+            if mask_norm.sum() < 0.001:
                 continue
-            normalized_emb = (mask_emb/mask_norm)
-            scores[mask_idx] = normalized_emb@text_emb
+            with np.errstate(divide='ignore'):
+                normalized_emb = (mask_emb/mask_norm)
+                # filter NaN
+                normalized_emb = normalized_emb[(mask_norm > 0.001).squeeze()]
+
+            # for distances debugging
+            # distances = pdist(normalized_emb, metric='euclidean')
+            # dist_matrix.append(squareform(distances).reshape(-1))
+
+            if remove_outliers:
+                # TODO hyperparameter tuning
+                min_samples = (mask_emb.shape[0] // 2) + 1
+                eps = 0.4
+                clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(normalized_emb)
+                # get biggest cluster
+                cluster_mask = clustering.labels_ != -1 
+                if cluster_mask.sum() != 0:
+                    normalized_emb = normalized_emb[cluster_mask]
+            if agg_fct == 'mean': 
+                scores[mask_idx] = np.nanmax(normalized_emb@text_emb)
+            elif agg_fct == 'max':
+                scores[mask_idx] = np.nanmean(normalized_emb@text_emb)
+            else:
+                raise Exception("please provide a valid aggregation function.")
+            
+        # np.save("/home/ml3d/openmask3d_daniel/distances/dist.npz", np.concatenate(dist_matrix))
 
         return scores
     
@@ -68,10 +96,17 @@ class QuerySimilarityComputation():
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--remove_outliers', type=bool, default=False)
+    parser.add_argument('--agg_fct', type=str, default='mean')
+    args = parser.parse_args()
+    print(args.remove_outliers)
+    print(args.agg_fct)
     # --------------------------------
     # Set the paths
     # --------------------------------
-    experiment_path = "/home/ml3d/openmask3d_daniel/output/2024-02-05-10-51-50-experiment"
+    # with crops
+    experiment_path = "/home/ml3d/openmask3d_daniel/output/2024-02-05-14-43-22-experiment/"
 
     path_pred_masks = f"{experiment_path}/scene_example_masks.pt"
     path_openmask3d_features = f"{experiment_path}/scene_example_openmask3d_features.npy"
@@ -106,14 +141,13 @@ def main():
     # Get the similarity scores
     # --------------------------------
     # get the per mask similarity scores, i.e. the cosine similarity between the query embedding and each openmask3d mask-feature for each object instance
-    per_mask_query_sim_scores = query_similarity_computer.compute_similarity_scores(openmask3d_features, query_text)
-
+    per_mask_query_sim_scores = query_similarity_computer.compute_similarity_scores(openmask3d_features, query_text, remove_outliers=args.remove_outliers, agg_fct=args.agg_fct)
 
     # --------------------------------
     # Visualize the similarity scores
     # --------------------------------
     # get the per-point heatmap colors for the similarity scores
-    per_point_similarity_colors = query_similarity_computer.get_per_point_colors_for_similarity(per_mask_query_sim_scores, pred_masks) # note: for normalizing the similarity heatmap colors for better clarity, you can check the arguments for the function get_per_point_colors_for_similarity
+    per_point_similarity_colors = query_similarity_computer.get_per_point_colors_for_similarity(per_mask_query_sim_scores, pred_masks, normalize_based_on_current_min_max=True) # note: for normalizing the similarity heatmap colors for better clarity, you can check the arguments for the function get_per_point_colors_for_similarity
 
     # visualize the scene with the similarity heatmap
     scene_pcd_w_sim_colors = o3d.geometry.PointCloud()
@@ -122,9 +156,9 @@ def main():
     scene_pcd_w_sim_colors.estimate_normals()
 
     # downsampled = o3d.geometry.voxel_down_sample(scene_pcd_w_sim_colors, 0.01)
-    o3d.visualization.draw_geometries([scene_pcd_w_sim_colors.voxel_down_sample(0.01)])
+    # o3d.visualization.draw_geometries([scene_pcd_w_sim_colors.voxel_down_sample(0.01)])
     # alternatively, you can save the scene_pcd_w_sim_colors as a .ply file
-    # o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
+    o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
 
 if __name__ == "__main__":
     main()

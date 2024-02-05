@@ -132,7 +132,7 @@ class FeaturesExtractor:
         topk_indices_per_mask = self.point_projector.get_top_k_indices_per_mask(topk)
         
         num_masks = self.point_projector.masks.num_masks
-        mask_clip = np.zeros((num_masks, 768)) #initialize mask clip
+        mask_clip = np.zeros((num_masks, topk, 768))
         
         np_images = self.images.get_as_np_list()
         for mask in tqdm(range(num_masks)): # for each mask 
@@ -169,8 +169,6 @@ class FeaturesExtractor:
                     # axs[1].imshow(best_mask)
                     # plt.show()
                     
-                    
-
                     # MULTI LEVEL CROPS
                     for level in range(num_levels):
                         # get the bbox and corresponding crops
@@ -193,8 +191,8 @@ class FeaturesExtractor:
                     image_features = self.clip_model.encode_image(image_input.to(self.device)).float()
                     image_features /= image_features.norm(dim=-1, keepdim=True) #normalize
                 
-                mask_clip[mask] = image_features.mean(axis=0).cpu().numpy()
+                avg_feature_per_image = image_features.view(-1, num_levels, 768).mean(dim=1)
+                num_images = avg_feature_per_image.shape[0]
+                mask_clip[mask][:num_images] = avg_feature_per_image.cpu().numpy()
                     
         return mask_clip
-        
-    

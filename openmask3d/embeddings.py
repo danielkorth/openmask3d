@@ -4,6 +4,8 @@ import clip
 import torch
 import torch.nn.functional as F
 from typing import Literal
+from transformers import AutoImageProcessor, AutoModel
+
 
 Embedders = Literal["clip", "siglip", "dinov2"]
 
@@ -66,11 +68,42 @@ class CLIPModel(EmbeddingModel):
 # DINO V2 model class
 class DinoV2Model(EmbeddingModel):
     def load_model(self):
-        self.embedding_model, self.embedding_preprocess = create_model_from_pretrained('hf-hub:timm/vit_large_patch14_dinov2.lvd142m', device=self.device)
-        
+        # self.embedding_model, self.embedding_preprocess = create_model_from_pretrained('hf-hub:timm/vit_large_patch14_dinov2.lvd142m', device=self.device)
+        self.embedding_preprocess = AutoImageProcessor.from_pretrained('facebook/dinov2-large')
+        self.embedding_model = AutoModel.from_pretrained('facebook/dinov2-large')
+        self.embedding_model.eval()
+        self.embedding_model.to(self.device)
+
     def encode_text(self, text: str):
         raise NotImplementedError("DinoV2Model does not support text encoding.")
 
+    def preprocess_image(self, image):
+        # Preprocess the image
+        return self.embedding_preprocess(image, return_tensors="pt")
+
+    def encode_image(self, batched_image: torch.Tensor):
+        """Encodes the preprocessed image using the model."""
+        # move dict to device
+        for k in batched_image:
+            batched_image[k] = batched_image[k].to(self.device)
+
+        # remove the double batch dimension
+        batched_image["pixel_values"] = batched_image["pixel_values"].squeeze(1)  
+        
+        with torch.no_grad():
+            # Encode the image
+            outputs = self.embedding_model(**batched_image)
+        
+        last_hidden_states = outputs[0]
+        cls_token = last_hidden_states[:, 0]
+        patch_tokens = last_hidden_states[:, 1:]
+        # image_features = cls_token
+        image_features = torch.cat([cls_token, patch_tokens.mean(dim=1)], dim=1)
+        image_features = torch.nn.functional.normalize(image_features, dim=-1)
+        # print(image_features.shape)
+        return image_features
+
+
     @property
     def dim(self):
-        return None
+        return 1024*2

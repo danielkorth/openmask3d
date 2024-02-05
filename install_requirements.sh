@@ -56,3 +56,4 @@ pip install  git+https://github.com/facebookresearch/segment-anything.git@6fdee8
 pip install ftfy==6.1.1
 pip install regex==2023.10.3
 pip install transformers
+pip install open_clip_torch

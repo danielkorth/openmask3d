@@ -29,7 +29,12 @@ class QuerySimilarityComputation():
     def get_image_embedding(self, image: Image.Image):
         # unsqueeze the image to add a batch dimension
         image_input_processed = self.embedding_model.preprocess_image(image).to(self.device)
-        image_input_processed = image_input_processed.unsqueeze(0)
+        if self.embedding_model.__class__.__name__ == "DinoV2Model":
+            # do not unsqueeze the image for DINO V2
+            pass
+        else:   
+            image_input_processed = image_input_processed.unsqueeze(0)
+        
         with torch.no_grad():
             image_embedding_normalized = self.embedding_model.encode_image(image_input_processed).float().cpu()
         return image_embedding_normalized.squeeze().numpy()
@@ -74,9 +79,12 @@ class QuerySimilarityComputation():
 
         return scores
     
-    def compute_similarity_scores_for_images(self, mask_features, image_query):
+    def compute_similarity_scores_for_images(self, mask_features, image_query, agg_fct="mean", **kwargs):
         img_emb = self.get_image_embedding(image_query)
-
+        if agg_fct == "mean":
+            print("Aggregating features using mean of crops features.")
+            mask_features = mask_features.mean(axis=1)
+        
         scores = np.zeros(len(mask_features))
         for mask_idx, mask_emb in enumerate(mask_features):
             mask_norm = np.linalg.norm(mask_emb)
@@ -126,7 +134,7 @@ def main(args):
     # Set the paths
     # --------------------------------
     # with crops
-    experiment_path = "/home/ml3d/openmask3d_daniel/output/2024-02-05-14-43-22-experiment/"
+    experiment_path = "/home/ml3d/openmask3d/output/2024-02-05-18-49-42-experiment/"
     path_pred_masks = f"{experiment_path}/scene_example_masks.pt"
     path_openmask3d_features = f"{experiment_path}/scene_example_openmask3d_features.npy"
     config_file = f"{experiment_path}/hydra_outputs/mask_features_computation/.hydra/config.yaml"
@@ -171,7 +179,7 @@ def main(args):
     # Get the similarity scores
     # --------------------------------
     # create query
-    if args.text:
+    if args.text and not args.image_path:
         query_text = args.text
         # get the per mask similarity scores, i.e. the cosine similarity between the query embedding and each openmask3d mask-feature for each object instance
         per_mask_query_sim_scores = query_similarity_computer.compute_similarity_scores(openmask3d_features, query_text)
@@ -199,9 +207,9 @@ def main(args):
     scene_pcd_w_sim_colors.estimate_normals()
 
     # downsampled = o3d.geometry.voxel_down_sample(scene_pcd_w_sim_colors, 0.01)
-    # o3d.visualization.draw_geometries([scene_pcd_w_sim_colors.voxel_down_sample(0.01)])
+    o3d.visualization.draw_geometries([scene_pcd_w_sim_colors.voxel_down_sample(0.01)])
     # alternatively, you can save the scene_pcd_w_sim_colors as a .ply file
-    o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}1.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
+    # o3d.io.write_point_cloud("data/scene_pcd_w_sim_colors_{}1.ply".format('_'.join(query_text.split(' '))), scene_pcd_w_sim_colors)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Query Similarity Computation')

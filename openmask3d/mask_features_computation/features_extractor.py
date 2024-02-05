@@ -199,11 +199,14 @@ class FeaturesExtractor:
                 self.predictor_sam.model.cpu()
                 # self.clip_model.to(torch.device('cuda'))                
             if(len(images_crops) > 0):
-                image_input = torch.tensor(np.stack(images_crops))
+                if isinstance(self.embedding_model, DinoV2Model):
+                    image_input = {k: torch.tensor(np.stack([img[k] for img in images_crops])) for k in images_crops[0].keys()}
+                else:
+                    image_input = torch.tensor(np.stack(images_crops))
                 with torch.no_grad():
                     image_features = self.embedding_model.encode_image(image_input).float()
                 
-                avg_feature_per_image = image_features.view(-1, num_levels, 768).mean(dim=1)
+                avg_feature_per_image = image_features.view(-1, num_levels, self.embedding_model.dim).mean(dim=1)
                 num_images = avg_feature_per_image.shape[0]
                 mask_clip[mask][:num_images] = avg_feature_per_image.cpu().numpy()
                     

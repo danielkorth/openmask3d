@@ -76,12 +76,12 @@ def process_scene(scene_id, resize_factor, downsample):
     os.makedirs(f"/home/ml3d/openmask3d/resources/{dest_folder}", exist_ok=True)
 
     # Move point cloud data
-    source_pcl = f"/home/data_hdd/scannet/data/{scene_id}/scans/mesh_aligned_0.05.ply"
+    source_pcl = f"/home/scannet/data/{scene_id}/scans/mesh_aligned_0.05.ply"
     dest_pcl = f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply"
     shutil.copy(source_pcl, dest_pcl)
 
     # Move iPhone camera images
-    source_rgb = f"/home/data_hdd/scannet/data/{scene_id}/iphone/rgb"
+    source_rgb = f"/home/scannet/data/{scene_id}/iphone/rgb"
     dest_rgb = f"/home/ml3d/openmask3d/resources/{dest_folder}/color"
     copy_files(source_rgb, dest_rgb)
 
@@ -99,7 +99,7 @@ def process_scene(scene_id, resize_factor, downsample):
                 img.save(full_file_name)
 
     # Move iPhone depth data
-    source_depth = f"/home/data_hdd/scannet/data/{scene_id}/iphone/depth"
+    source_depth = f"/home/scannet/data/{scene_id}/iphone/depth"
     dest_depth = f"/home/ml3d/openmask3d/resources/{dest_folder}/depth"
     copy_files(source_depth, dest_depth)
 
@@ -139,7 +139,7 @@ def process_scene(scene_id, resize_factor, downsample):
             file.write(' '.join(map(str, row)) + '\n')
 
     # Extract aligned pose
-    pose_file = f"/home/data_hdd/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
+    pose_file = f"/home/scannet/data/{scene_id}/iphone/pose_intrinsic_imu.json"
     output_dir = f"/home/ml3d/openmask3d/resources/{dest_folder}/pose"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -171,12 +171,18 @@ def process_scene(scene_id, resize_factor, downsample):
             os.remove(os.path.join(output_dir, file))
 
 
-        # downsample the point cloud by open3d
-        pcl_file = f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply"
-        import open3d as o3d
-        pcd = o3d.io.read_point_cloud(pcl_file)
-        downsampled_pcd = pcd.voxel_down_sample(voxel_size=0.05)
-        o3d.io.write_point_cloud(f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply", downsampled_pcd)
+    # downsample the point cloud by open3d
+    pcl_file = f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply"
+    import open3d as o3d
+    pcd = o3d.io.read_point_cloud(pcl_file)
+    # downsampled_pcd = pcd.voxel_down_sample_(voxel_size=0.02)
+    downsampled_pcd = pcd.uniform_down_sample(every_k_points=3)
+
+    # add feature vecotr to the pcl
+    # downsampled_pcd.colors = o3d.utility.Vector3dVector(np.random.rand(downsampled_pcd.points.shape[0], 3))
+    # downsampled_pcd.normals = o3d.utility.Vector3dVector(np.random.rand(downsampled_pcd.points.shape[0], 3))
+
+    o3d.io.write_point_cloud(f"/home/ml3d/openmask3d/resources/{dest_folder}/scene_example.ply", downsampled_pcd)
 
         
 

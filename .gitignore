@@ -11,3 +11,6 @@ openmask3d/saved
 *.ipynb
 tmp_scannet++/
 *.egg-info
+ML3D_Project_Proposal.pdf
+.Xauthority
+2.txt

@@ -134,7 +134,7 @@ def main(args):
     # Set the paths
     # --------------------------------
     # with crops
-    experiment_path = "/home/ml3d/openmask3d/output/2024-02-05-18-49-42-experiment/"
+    experiment_path = args.experiment_path
     path_pred_masks = f"{experiment_path}/scene_example_masks.pt"
     path_openmask3d_features = f"{experiment_path}/scene_example_openmask3d_features.npy"
     config_file = f"{experiment_path}/hydra_outputs/mask_features_computation/.hydra/config.yaml"

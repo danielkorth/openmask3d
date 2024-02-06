@@ -62,7 +62,8 @@ def main(ctx: DictConfig):
                                                 vis_threshold=ctx.openmask3d.vis_threshold,
                                                 device=device)
 
-        features = features_extractor.extract_features(topk=ctx.openmask3d.top_k, 
+        features = features_extractor.extract_features(preselection=ctx.openmask3d.preselection,
+                                                        topk=ctx.openmask3d.top_k, 
                                                         multi_level_expansion_ratio = ctx.openmask3d.multi_level_expansion_ratio,
                                                         num_levels=ctx.openmask3d.num_of_levels, 
                                                         num_random_rounds=ctx.openmask3d.num_random_rounds,

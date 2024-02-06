@@ -102,9 +102,43 @@ class PointProjector:
         self.resolution = resolution
         return visible_points_in_view_in_mask, visible_points_view, projected_points, resolution
     
-    def get_top_k_indices_per_mask(self, k):
+    def get_top_k_indices_per_mask(self, preselection, k):
+        def calculate_angle(R1, R2):
+            # Calculate relative rotation
+            R = np.dot(R1.T, R2)
+            # Ensure trace is within valid range
+            trace = np.clip((np.trace(R) - 1) / 2, -1, 1)
+            # Return angle
+            return np.arccos(trace)
+
+        # Preselect based on visibility
         num_points_in_view_in_mask = self.visible_points_in_view_in_mask.sum(axis=2).sum(axis=2)
-        topk_indices_per_mask = np.argsort(-num_points_in_view_in_mask, axis=0)[:k,:].T
+        preselection_indices_per_mask = np.argsort(-num_points_in_view_in_mask, axis=0)[:preselection,:].T
+
+        # Choose top-k based on most diverse camera angles
+        masks = preselection_indices_per_mask.shape[0]
+        camera_orientations = self.camera.load_poses(self.indices)[:,:3,:3]
+
+        # Calculate pairwise angles for all camera orientations
+        n_orientations = camera_orientations.shape[0]
+        angles = np.zeros((n_orientations, n_orientations))
+        for i in range(n_orientations):
+            for j in range(n_orientations):
+                angles[i,j] = calculate_angle(camera_orientations[i], camera_orientations[j])
+
+        # Choose top-k indices based on most diverse camera angles
+        topk_indices_per_mask = np.zeros((masks, k), dtype=int)
+        for i, indices in tqdm(enumerate(preselection_indices_per_mask)):
+            selected_indices = []
+            selected_indices.append(indices[0])
+            while len(selected_indices) < k:
+                # Calculate min angle to selected poses for each candidate
+                min_angles_to_selected = np.min(angles[indices][:, selected_indices], axis=1)
+                # Select the index with the maximum of these minimum angles
+                next_index = np.argmax(min_angles_to_selected)
+                selected_indices.append(indices[next_index])
+            topk_indices_per_mask[i] = selected_indices
+
         return topk_indices_per_mask
     
 class FeaturesExtractor:
@@ -134,12 +168,12 @@ class FeaturesExtractor:
             raise ValueError("Invalid embedding model name")
         
     
-    def extract_features(self, topk, multi_level_expansion_ratio, num_levels, num_random_rounds, num_selected_points, save_crops, out_folder, optimize_gpu_usage=False):
+    def extract_features(self, preselection, topk, multi_level_expansion_ratio, num_levels, num_random_rounds, num_selected_points, save_crops, out_folder, optimize_gpu_usage=False):
         if(save_crops):
             out_folder = os.path.join(out_folder, "crops")
             os.makedirs(out_folder, exist_ok=True)
                             
-        topk_indices_per_mask = self.point_projector.get_top_k_indices_per_mask(topk)
+        topk_indices_per_mask = self.point_projector.get_top_k_indices_per_mask(preselection, topk)
         
         num_masks = self.point_projector.masks.num_masks
         mask_clip = np.zeros((num_masks, topk, self.embedding_model.dim)) #initialize mask clip

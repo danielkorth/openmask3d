@@ -15,6 +15,7 @@ data:
   point_cloud_path: '../resources/scene_example/scene0011_00_vh_clean_2.ply'
 
 openmask3d:
+  preselection: 10
   top_k: 5
   multi_level_expansion_ratio: 0.1
   num_of_levels: 3

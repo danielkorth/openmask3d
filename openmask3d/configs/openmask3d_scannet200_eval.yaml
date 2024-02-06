@@ -16,6 +16,7 @@ data:
     images_ext: '.jpg'
 
 openmask3d:
+  preselection: 10
   top_k: 5
   multi_level_expansion_ratio: 0.1
   num_of_levels: 3

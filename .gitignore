@@ -1,0 +1,17 @@
+*.jpg
+resources
+scannet200
+output
+*.pyc
+*.pyo
+*.o
+openmask3d/class_agnostic_mask_computation
+openmask3d/saved
+*.ply
+*.ipynb
+tmp_scannet++/
+*.egg-info
+ML3D_Project_Proposal.pdf
+.Xauthority
+2.txt
+images

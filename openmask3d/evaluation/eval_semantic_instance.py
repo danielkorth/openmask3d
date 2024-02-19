@@ -52,6 +52,10 @@ import util_3d
 # if opt.output_file == '':
 #    opt.output_file = os.path.join(os.getcwd(), 'semantic_instance_evaluation.txt')
 
+from scannet_constants import VALID_CLASS_IDS_PP, CLASS_LABELS_PP
+# from scannet_constants import CLASS_LABELS_TAIL, CLASS_LABELS_COMMON, CLASS_LABELS_HEAD
+from scannet_constants import CLASS_LABELS_HEAD_PP, CLASS_LABELS_COMMON_PP, CLASS_LABELS_TAIL_PP
+
 
 # ---------- Label info ---------- #
 DATASET_NAME = "scannet" # this is the default value, it is overridden if it is another dataset.
@@ -65,6 +69,7 @@ for i in range(len(VALID_CLASS_IDS)):
     ID_TO_LABEL[VALID_CLASS_IDS[i]] = CLASS_LABELS[i]
 
 HEAD_CATS_SCANNET_200, COMMON_CATS_SCANNET_200, TAIL_CATS_SCANNET_200 = None, None, None
+CLASS_LABELS_HEAD_PP, CLASS_LABELS_COMMON_PP, CLASS_LABELS_TAIL_PP = set(CLASS_LABELS_HEAD_PP), set(CLASS_LABELS_COMMON_PP), set(CLASS_LABELS_TAIL_PP)
 
 # ---------- Evaluation params ---------- #
 # overlaps for evaluation
@@ -90,7 +95,7 @@ def evaluate_matches(matches):
     rc = np.zeros((len(dist_threshes), len(CLASS_LABELS), len(overlaps)), float) # recall
     matched_predictions_category_names = {} #set([])
     gt_category_names = {} #set([])
-    
+
     for di, (min_region_size, distance_thresh, distance_conf) in enumerate(zip(min_region_sizes, dist_threshes, dist_confs)):
         matched_predictions_category_names[di] = {}
         for oi, overlap_th in enumerate(overlaps):
@@ -101,7 +106,7 @@ def evaluate_matches(matches):
 
     for di, (min_region_size, distance_thresh, distance_conf) in enumerate(
             zip(min_region_sizes, dist_threshes, dist_confs)):
-        
+
         for oi, overlap_th in enumerate(overlaps):
             pred_visited = {}
             for m in matches:
@@ -123,6 +128,7 @@ def evaluate_matches(matches):
                     pred_instances = matches[m]['pred'][label_name]
                     gt_instances = matches[m]['gt'][label_name]
                     # filter groups in ground truth
+                    # print("gt_instances", gt_instances)
                     gt_instances = [gt for gt in gt_instances if
                                     gt['instance_id'] >= 1000 and gt['vert_count'] >= min_region_size and gt[
                                         'med_dist'] <= distance_thresh and gt['dist_conf'] >= distance_conf]
@@ -203,6 +209,8 @@ def evaluate_matches(matches):
                     y_true = np.append(y_true, cur_true)
                     y_score = np.append(y_score, cur_score)
 
+                # print(has_gt, has_pred, len(y_true), len(y_score))
+
                 # compute average precision
                 if has_gt and has_pred:
                     # compute precision recall curve first
@@ -275,6 +283,7 @@ def evaluate_matches(matches):
                 else:
                     ap_current = float('nan')
                     rc_current = float('nan')
+                    ar_current = float('nan')
                 ap[di, li, oi] = ap_current
                 ar[di, li, oi] = ar_current
                 rc[di, li, oi] = rc_current
@@ -301,13 +310,18 @@ def compute_averages(aps):
     avg_dict['all_ap_50%'] = np.nanmean(aps[d_inf, :, o50])
     avg_dict['all_ap_25%'] = np.nanmean(aps[d_inf, :, o25])
     avg_dict["classes"] = {}
-    
+
     #pdb.set_trace()
     if DATASET_NAME == 'scannet200': # compute average scores for head, common, tail categories
         head_scores = {title:[] for title in ['ap', 'ap25%', 'ap50%']}
         common_scores = {title:[] for title in ['ap', 'ap25%', 'ap50%']}
         tail_scores = {title:[] for title in ['ap', 'ap25%', 'ap50%']}
-        
+
+    if DATASET_NAME=='scannet++':
+        head_scores = {title:[] for title in ['ap', 'ap25%', 'ap50%']}
+        common_scores = {title:[] for title in ['ap', 'ap25%', 'ap50%']}
+        tail_scores = {title:[] for title in ['ap', 'ap25%', 'ap50%']}
+
     for (li, label_name) in enumerate(CLASS_LABELS):
         if label_name not in avg_dict["classes"]:
             avg_dict["classes"][label_name] = {}
@@ -328,13 +342,31 @@ def compute_averages(aps):
                     tail_scores[ap_type].append(avg_dict["classes"][label_name][ap_type])
             else:
                 raise NotImplementedError(label_name)
-            
+
+        if DATASET_NAME == 'scannet++':
+            if (label_name in CLASS_LABELS_HEAD_PP):
+                for ap_type in ['ap', 'ap25%', 'ap50%']:
+                    head_scores[ap_type].append(avg_dict["classes"][label_name][ap_type])
+            elif (label_name in CLASS_LABELS_COMMON_PP):
+                for ap_type in ['ap', 'ap25%', 'ap50%']:
+                    common_scores[ap_type].append(avg_dict["classes"][label_name][ap_type])
+            elif (label_name in CLASS_LABELS_TAIL_PP):
+                for ap_type in ['ap', 'ap25%', 'ap50%']:
+                    tail_scores[ap_type].append(avg_dict["classes"][label_name][ap_type])
+            else:
+                raise NotImplementedError(label_name)
+
     if DATASET_NAME=='scannet200':
         for score_type in ['ap', 'ap25%', 'ap50%']:
             avg_dict['head_'+score_type] = np.nanmean(head_scores[score_type]) #64, orig 66
             avg_dict['common_'+score_type] = np.nanmean(common_scores[score_type]) #68, orig 68
             avg_dict['tail_'+score_type] = np.nanmean(tail_scores[score_type]) #66, orig 66
-    
+
+    if DATASET_NAME=='scannet++':
+        for score_type in ['ap', 'ap25%', 'ap50%']:
+            avg_dict['head_'+score_type] = np.nanmean(head_scores[score_type])
+            avg_dict['common_'+score_type] = np.nanmean(common_scores[score_type])
+            avg_dict['tail_'+score_type] = np.nanmean(tail_scores[score_type])
     return avg_dict
 
 
@@ -349,12 +381,17 @@ def compute_averages_ar(ars):
     avg_dict['all_ar_50%'] = np.nanmean(ars[d_inf, :, o50])
     avg_dict['all_ar_25%'] = np.nanmean(ars[d_inf, :, o25])
     avg_dict["classes"] = {}
-        
+
     if DATASET_NAME == 'scannet200': # compute average scores for head, common, tail categories
         head_scores = {title:[] for title in ['ar', 'ar25%', 'ar50%']}
         common_scores = {title:[] for title in ['ar', 'ar25%', 'ar50%']}
         tail_scores = {title:[] for title in ['ar', 'ar25%', 'ar50%']}
-        
+
+    if DATASET_NAME == 'scannet++': # compute average scores for head, common, tail categories
+        head_scores = {title:[] for title in ['ar', 'ar25%', 'ar50%']}
+        common_scores = {title:[] for title in ['ar', 'ar25%', 'ar50%']}
+        tail_scores = {title:[] for title in ['ar', 'ar25%', 'ar50%']}
+
     #pdb.set_trace()
     for (li, label_name) in enumerate(CLASS_LABELS):
         if label_name not in avg_dict["classes"]:
@@ -376,13 +413,32 @@ def compute_averages_ar(ars):
                     tail_scores[ar_type].append(avg_dict["classes"][label_name][ar_type])
             else:
                 raise NotImplementedError(label_name)
-            
+
+        if DATASET_NAME == 'scannet++':
+            if (label_name in CLASS_LABELS_HEAD_PP):
+                for ar_type in ['ar', 'ar25%', 'ar50%']:
+                    head_scores[ar_type].append(avg_dict["classes"][label_name][ar_type])
+            elif (label_name in CLASS_LABELS_COMMON_PP):
+                for ar_type in ['ar', 'ar25%', 'ar50%']:
+                    common_scores[ar_type].append(avg_dict["classes"][label_name][ar_type])
+            elif (label_name in CLASS_LABELS_TAIL_PP):
+                for ar_type in ['ar', 'ar25%', 'ar50%']:
+                    tail_scores[ar_type].append(avg_dict["classes"][label_name][ar_type])
+            else:
+                raise NotImplementedError(label_name)
+
     if DATASET_NAME=='scannet200':
         for score_type in ['ar', 'ar25%', 'ar50%']:
             avg_dict['head_'+score_type] = np.nanmean(head_scores[score_type]) #64, orig 66
             avg_dict['common_'+score_type] = np.nanmean(common_scores[score_type]) #68, orig 68
             avg_dict['tail_'+score_type] = np.nanmean(tail_scores[score_type]) #66, orig 66
-    
+
+    if DATASET_NAME=='scannet++':
+        for score_type in ['ar', 'ar25%', 'ar50%']:
+            avg_dict['head_'+score_type] = np.nanmean(head_scores[score_type])
+            avg_dict['common_'+score_type] = np.nanmean(common_scores[score_type])
+            avg_dict['tail_'+score_type] = np.nanmean(tail_scores[score_type])
+
     return avg_dict
 
 
@@ -398,12 +454,17 @@ def compute_averages_rc(rcs):
     avg_dict['all_rc_50%'] = np.nanmean(rcs[d_inf, :, o50])
     avg_dict['all_rc_25%'] = np.nanmean(rcs[d_inf, :, o25])
     avg_dict["classes"] = {}
-        
+
     if DATASET_NAME == 'scannet200': # compute average scores for head, common, tail categories
         head_scores = {title:[] for title in ['rc', 'rc25%', 'rc50%']}
         common_scores = {title:[] for title in ['rc', 'rc25%', 'rc50%']}
         tail_scores = {title:[] for title in ['rc', 'rc25%', 'rc50%']}
-        
+
+    if DATASET_NAME == 'scannet++': # compute average scores for head, common, tail categories
+        head_scores = {title:[] for title in ['rc', 'rc25%', 'rc50%']}
+        common_scores = {title:[] for title in ['rc', 'rc25%', 'rc50%']}
+        tail_scores = {title:[] for title in ['rc', 'rc25%', 'rc50%']}
+
     #pdb.set_trace()
     for (li, label_name) in enumerate(CLASS_LABELS):
         if label_name not in avg_dict["classes"]:
@@ -425,13 +486,32 @@ def compute_averages_rc(rcs):
                     tail_scores[rc_type].append(avg_dict["classes"][label_name][rc_type])
             else:
                 raise NotImplementedError(label_name)
-            
+
+        if DATASET_NAME == 'scannet++':
+            if (label_name in CLASS_LABELS_HEAD_PP):
+                for rc_type in ['rc', 'rc25%', 'rc50%']:
+                    head_scores[rc_type].append(avg_dict["classes"][label_name][rc_type])
+            elif (label_name in CLASS_LABELS_COMMON_PP):
+                for rc_type in ['rc', 'rc25%', 'rc50%']:
+                    common_scores[rc_type].append(avg_dict["classes"][label_name][rc_type])
+            elif (label_name in CLASS_LABELS_TAIL_PP):
+                for rc_type in ['rc', 'rc25%', 'rc50%']:
+                    tail_scores[rc_type].append(avg_dict["classes"][label_name][rc_type])
+            else:
+                raise NotImplementedError(label_name)
+
     if DATASET_NAME=='scannet200':
         for score_type in ['rc', 'rc25%', 'rc50%']:
             avg_dict['head_'+score_type] = np.nanmean(head_scores[score_type]) #64, orig 66
             avg_dict['common_'+score_type] = np.nanmean(common_scores[score_type]) #68, orig 68
             avg_dict['tail_'+score_type] = np.nanmean(tail_scores[score_type]) #66, orig 66
-    
+
+    if DATASET_NAME=='scannet++':
+        for score_type in ['rc', 'rc25%', 'rc50%']:
+            avg_dict['head_'+score_type] = np.nanmean(head_scores[score_type])
+            avg_dict['common_'+score_type] = np.nanmean(common_scores[score_type])
+            avg_dict['tail_'+score_type] = np.nanmean(tail_scores[score_type])
+
     return avg_dict
 
 def compute_averages_pcdc(pcdc_scores):
@@ -444,7 +524,7 @@ def compute_averages_pcdc(pcdc_scores):
     avg_dict['all_pcdc'] = np.nanmean(pcdc_scores[:, oAllBut25])
     avg_dict['all_pcdc_50%'] = np.nanmean(pcdc_scores[:, o50])
     avg_dict['all_pcdc_25%'] = np.nanmean(pcdc_scores[:, o25])
-        
+
     return avg_dict
 
 
@@ -452,9 +532,11 @@ def make_pred_info(pred: dict):
     # pred = {'pred_scores' = 100, 'pred_classes' = 100 'pred_masks' = Nx100}
     pred_info = {}
     assert (pred['pred_classes'].shape[0] == pred['pred_scores'].shape[0] == pred['pred_masks'].shape[1])
+    # assert pred['pred_scores'].shape[0] == pred['pred_masks'].shape[1]
     for i in range(len(pred['pred_classes'])):
         info = {}
-        info["label_id"] = pred['pred_classes'][i]
+        # info["label_id"] = pred['pred_classes'][i]
+        info["label_id"] = pred['pred_classes'][i, :]
         info["conf"] = pred['pred_scores'][i]
         info["mask"] = pred['pred_masks'][:, i]
         pred_info[uuid4()] = info  # we later need to identify these objects
@@ -463,13 +545,25 @@ def make_pred_info(pred: dict):
 
 def assign_instances_for_scan(pred: dict, gt_file: str):
     pred_info = make_pred_info(pred)
-    try:
+    if DATASET_NAME == 'scannet++':
+        try:
+            gt_ids = util_3d.load_ids(gt_file)
+            gt_ids = gt_ids[::3]
+        except Exception as e:
+            util.print_error('unable to load ' + gt_file + ': ' + str(e))
+    elif DATASET_NAME == 'scannet200':
         gt_ids = util_3d.load_ids(gt_file)
-    except Exception as e:
-        util.print_error('unable to load ' + gt_file + ': ' + str(e))
+    else:
+        raise NotImplementedError("DATASET_NAME must be either 'scannet200' or 'scannet++'")
 
+    # print(gt_file)
+    # print(len(gt_ids))
+
+    # print(pred)
     # get gt instances
     gt_instances = util_3d.get_instances(gt_ids, VALID_CLASS_IDS, CLASS_LABELS, ID_TO_LABEL)
+
+    # print({k:v for k,v in gt_instances.items() if v})
     # associate
     gt2pred = deepcopy(gt_instances)
     for label in gt2pred:
@@ -483,15 +577,46 @@ def assign_instances_for_scan(pred: dict, gt_file: str):
     bool_void = np.logical_not(np.in1d(gt_ids // 1000, VALID_CLASS_IDS))
     # go thru all prediction masks
     for uuid in pred_info:
-        label_id = int(pred_info[uuid]['label_id'])
-        conf = pred_info[uuid]['conf']
-        if not label_id in ID_TO_LABEL:
+        #### top k ####
+        label_ids = pred_info[uuid]['label_id']
+        pred_mask = pred_info[uuid]['mask']
+
+        # print(label_ids)
+        # assert len(label_ids) == 5
+        # raise NotImplementedError
+        intersections = []
+        label_names = []
+        for label_id in label_ids:
+            # label_id = int(pred_info[uuid]['label_id'])
+            label_id = int(label_id)
+            conf = pred_info[uuid]['conf']
+            if not label_id in ID_TO_LABEL:
+                print("skipping label id", label_id)
+                # continue
+                break
+            label_name = ID_TO_LABEL[label_id]
+            label_names.append(label_name)
+
+            max_intersection = 0
+            for (gt_num, gt_inst) in enumerate(gt2pred[label_name]):
+                intersection = np.count_nonzero(np.logical_and(gt_ids == gt_inst['instance_id'], pred_mask))
+                if intersection > max_intersection:
+                    max_intersection = intersection
+            intersections.append(max_intersection)
+
+        if len(intersections) == 0:
             continue
-        label_name = ID_TO_LABEL[label_id]
+        # avoid error throw if no intersection (does not matter which label is chosen in this case)
+
+        label_name = label_names[np.argmax(intersections)]
+        #### top k ####
+
+        # label_name = "air conditioner"
         # read the mask
         pred_mask = pred_info[uuid]['mask']
-        #print(pred_mask.shape , gt_ids.shape)
-        #print(len(pred_mask) , len(gt_ids))
+        # print(pred_mask.shape , gt_ids.shape)
+        # print(len(pred_mask) , len(gt_ids))
+
         assert (len(pred_mask) == len(gt_ids))
         # convert to binary
         pred_mask = np.not_equal(pred_mask, 0)
@@ -513,6 +638,7 @@ def assign_instances_for_scan(pred: dict, gt_file: str):
         for (gt_num, gt_inst) in enumerate(gt2pred[label_name]):
             intersection = np.count_nonzero(np.logical_and(gt_ids == gt_inst['instance_id'], pred_mask))
             # print("intersection", intersection)
+            # print(label_name)
             if intersection > 0:
                 gt_copy = gt_inst.copy()
                 pred_copy = pred_instance.copy()
@@ -520,10 +646,12 @@ def assign_instances_for_scan(pred: dict, gt_file: str):
                 pred_copy['intersection'] = intersection
                 matched_gt.append(gt_copy)
                 gt2pred[label_name][gt_num]['matched_pred'].append(pred_copy)
+        # print("matched_gt", matched_gt)
         pred_instance['matched_gt'] = matched_gt
         num_pred_instances += 1
         pred2gt[label_name].append(pred_instance)
 
+    # print("pred2gt", pred2gt)
     return gt2pred, pred2gt
 
 
@@ -554,6 +682,18 @@ def print_results(avgs):
         print(line)
 
     if DATASET_NAME=='scannet200':
+        print("-" * lineLen)
+        for cat_type in ['head', 'common', 'tail']:
+            cat_ap_avg = avgs[cat_type+'_ap']
+            cat_ap_50o = avgs[cat_type+'_ap50%']
+            cat_ap_25o = avgs[cat_type+'_ap25%']
+            line = "{:<15}".format(cat_type) + sep + col1
+            line += "{:>15.3f}".format(cat_ap_avg) + sep
+            line += "{:>15.3f}".format(cat_ap_50o) + sep
+            line += "{:>15.3f}".format(cat_ap_25o) + sep
+            print(line)
+
+    if DATASET_NAME=='scannet++':
         print("-" * lineLen)
         for cat_type in ['head', 'common', 'tail']:
             cat_ap_avg = avgs[cat_type+'_ap']
@@ -687,6 +827,33 @@ def print_results_ap_ar_rc_pcdc(avgs, ar_avgs, rc_avgs, pcdc_avgs, print_mode={'
                 line += "{:>15.3f}".format(cat_rc_25o) + sep
             print(line)
 
+    if DATASET_NAME=='scannet++':
+        print("-" * lineLen)
+        for cat_type in ['head', 'common', 'tail']:
+            line = "{:<15}".format(cat_type) + sep + col1
+            if print_mode['ap_avgs']:
+                cat_ap_avg = avgs[cat_type+'_ap']
+                cat_ap_50o = avgs[cat_type+'_ap50%']
+                cat_ap_25o = avgs[cat_type+'_ap25%']
+                line += "{:>15.3f}".format(cat_ap_avg) + sep
+                line += "{:>15.3f}".format(cat_ap_50o) + sep
+                line += "{:>15.3f}".format(cat_ap_25o) + sep
+            if print_mode['ar_avgs']:
+                cat_ar_avg = ar_avgs[cat_type+'_ar']
+                cat_ar_50o = ar_avgs[cat_type+'_ar50%']
+                cat_ar_25o = ar_avgs[cat_type+'_ar25%']
+                line += "{:>15.3f}".format(cat_ar_avg) + sep
+                line += "{:>15.3f}".format(cat_ar_50o) + sep
+                line += "{:>15.3f}".format(cat_ar_25o) + sep
+            if print_mode['rc_avgs']:
+                cat_rc_avg = rc_avgs[cat_type+'_rc']
+                cat_rc_50o = rc_avgs[cat_type+'_rc50%']
+                cat_rc_25o = rc_avgs[cat_type+'_rc25%']
+                line += "{:>15.3f}".format(cat_rc_avg) + sep
+                line += "{:>15.3f}".format(cat_rc_50o) + sep
+                line += "{:>15.3f}".format(cat_rc_25o) + sep
+            print(line)
+
     all_ap_avg = avgs["all_ap"]
     all_ap_50o = avgs["all_ap_50%"]
     all_ap_25o = avgs["all_ap_25%"]
@@ -772,6 +939,25 @@ def evaluate(preds: dict, gt_path: str, output_file: str, dataset: str = "scanne
     global HEAD_CATS_SCANNET_200
     global COMMON_CATS_SCANNET_200
     global TAIL_CATS_SCANNET_200
+    global HEAD_CATS_SCANNET_PP
+    global COMMON_CATS_SCANNET_PP
+    global TAIL_CATS_SCANNET_PP
+
+    if dataset == "scannet++":
+        DATASET_NAME = "scannet++"
+        CLASS_LABELS = CLASS_LABELS_PP
+        VALID_CLASS_IDS = np.array(VALID_CLASS_IDS_PP)
+
+        ID_TO_LABEL = {}
+        LABEL_TO_ID = {}
+        for i in range(len(VALID_CLASS_IDS)):
+            LABEL_TO_ID[CLASS_LABELS[i]] = VALID_CLASS_IDS[i]
+            ID_TO_LABEL[VALID_CLASS_IDS[i]] = CLASS_LABELS[i]
+
+        # HEAD_CATS_SCANNET_PP = set(CLASS_LABELS_HEAD)
+        # COMMON_CATS_SCANNET_PP = set(CLASS_LABELS_COMMON)
+        # TAIL_CATS_SCANNET_PP = set(CLASS_LABELS_TAIL)
+
 
     if dataset == "scannet200":
         DATASET_NAME = "scannet200"
@@ -828,41 +1014,41 @@ def evaluate(preds: dict, gt_path: str, output_file: str, dataset: str = "scanne
             LABEL_TO_ID[CLASS_LABELS[i]] = VALID_CLASS_IDS[i]
             ID_TO_LABEL[VALID_CLASS_IDS[i]] = CLASS_LABELS[i]
 
-        
-        HEAD_CATS_SCANNET_200 = set(['tv stand', 'curtain', 'blinds', 'shower curtain', 'bookshelf', 'tv', 'kitchen cabinet', 
-                                'pillow', 'lamp', 'dresser', 'monitor', 'object', 'ceiling', 'board', 'stove', 
-                                'closet wall', 'couch', 'office chair', 'kitchen counter', 'shower', 'closet', 
-                                'doorframe', 'sofa chair', 'mailbox', 'nightstand', 'washing machine', 'picture', 
-                                'book', 'sink', 'recycling bin', 'table', 'backpack', 'shower wall', 'toilet', 
-                                'copier', 'counter', 'stool', 'refrigerator', 'window', 'file cabinet', 'chair', 
-                                'wall', 'plant', 'coffee table', 'stairs', 'armchair', 'cabinet', 'bathroom vanity', 
-                                'bathroom stall', 'mirror', 'blackboard', 'trash can', 'stair rail', 'box', 'towel', 
-                                'door', 'clothes', 'whiteboard', 'bed', 'floor', 'bathtub', 'desk', 'wardrobe', 
+
+        HEAD_CATS_SCANNET_200 = set(['tv stand', 'curtain', 'blinds', 'shower curtain', 'bookshelf', 'tv', 'kitchen cabinet',
+                                'pillow', 'lamp', 'dresser', 'monitor', 'object', 'ceiling', 'board', 'stove',
+                                'closet wall', 'couch', 'office chair', 'kitchen counter', 'shower', 'closet',
+                                'doorframe', 'sofa chair', 'mailbox', 'nightstand', 'washing machine', 'picture',
+                                'book', 'sink', 'recycling bin', 'table', 'backpack', 'shower wall', 'toilet',
+                                'copier', 'counter', 'stool', 'refrigerator', 'window', 'file cabinet', 'chair',
+                                'wall', 'plant', 'coffee table', 'stairs', 'armchair', 'cabinet', 'bathroom vanity',
+                                'bathroom stall', 'mirror', 'blackboard', 'trash can', 'stair rail', 'box', 'towel',
+                                'door', 'clothes', 'whiteboard', 'bed', 'floor', 'bathtub', 'desk', 'wardrobe',
                                 'clothes dryer', 'radiator', 'shelf'])
 
-        COMMON_CATS_SCANNET_200 = set(["cushion", "end table", "dining table", "keyboard", "bag", "toilet paper", "printer", 
-                                "blanket", "microwave", "shoe", "computer tower", "bottle", "bin", "ottoman", "bench", 
-                                "basket", "fan", "laptop", "person", "paper towel dispenser", "oven", "rack", "piano", 
-                                "suitcase", "rail", "container", "telephone", "stand", "light", "laundry basket", 
-                                "pipe", "seat", "column", "bicycle", "ladder", "jacket", "storage bin", "coffee maker", 
-                                "dishwasher", "machine", "mat", "windowsill", "bulletin board", "fireplace", "mini fridge", 
-                                "water cooler", "shower door", "pillar", "ledge", "furniture", "cart", "decoration", 
-                                "closet door", "vacuum cleaner", "dish rack", "range hood", "projector screen", "divider", 
-                                "bathroom counter", "laundry hamper", "bathroom stall door", "ceiling light", "trash bin", 
+        COMMON_CATS_SCANNET_200 = set(["cushion", "end table", "dining table", "keyboard", "bag", "toilet paper", "printer",
+                                "blanket", "microwave", "shoe", "computer tower", "bottle", "bin", "ottoman", "bench",
+                                "basket", "fan", "laptop", "person", "paper towel dispenser", "oven", "rack", "piano",
+                                "suitcase", "rail", "container", "telephone", "stand", "light", "laundry basket",
+                                "pipe", "seat", "column", "bicycle", "ladder", "jacket", "storage bin", "coffee maker",
+                                "dishwasher", "machine", "mat", "windowsill", "bulletin board", "fireplace", "mini fridge",
+                                "water cooler", "shower door", "pillar", "ledge", "furniture", "cart", "decoration",
+                                "closet door", "vacuum cleaner", "dish rack", "range hood", "projector screen", "divider",
+                                "bathroom counter", "laundry hamper", "bathroom stall door", "ceiling light", "trash bin",
                                 "bathroom cabinet", "structure", "storage organizer", "potted plant", "mattress"])
-                                
-        TAIL_CATS_SCANNET_200 = set(["paper", "plate", "soap dispenser", "bucket", "clock", "guitar", "toilet paper holder", 
-                                "speaker", "cup", "paper towel roll", "bar", "toaster", "ironing board", "soap dish", 
-                                "toilet paper dispenser", "fire extinguisher", "ball", "hat", "shower curtain rod", 
-                                "paper cutter", "tray", "toaster oven", "mouse", "toilet seat cover dispenser", 
-                                "storage container", "scale", "tissue box", "light switch", "crate", "power outlet", 
-                                "sign", "projector", "candle", "plunger", "stuffed animal", "headphones", "broom", 
-                                "guitar case", "dustpan", "hair dryer", "water bottle", "handicap bar", "purse", "vent", 
-                                "shower floor", "water pitcher", "bowl", "paper bag", "alarm clock", "music stand", 
-                                "laundry detergent", "dumbbell", "tube", "cd case", "closet rod", "coffee kettle", 
-                                "shower head", "keyboard piano", "case of water bottles", "coat rack", "folded chair", 
+
+        TAIL_CATS_SCANNET_200 = set(["paper", "plate", "soap dispenser", "bucket", "clock", "guitar", "toilet paper holder",
+                                "speaker", "cup", "paper towel roll", "bar", "toaster", "ironing board", "soap dish",
+                                "toilet paper dispenser", "fire extinguisher", "ball", "hat", "shower curtain rod",
+                                "paper cutter", "tray", "toaster oven", "mouse", "toilet seat cover dispenser",
+                                "storage container", "scale", "tissue box", "light switch", "crate", "power outlet",
+                                "sign", "projector", "candle", "plunger", "stuffed animal", "headphones", "broom",
+                                "guitar case", "dustpan", "hair dryer", "water bottle", "handicap bar", "purse", "vent",
+                                "shower floor", "water pitcher", "bowl", "paper bag", "alarm clock", "music stand",
+                                "laundry detergent", "dumbbell", "tube", "cd case", "closet rod", "coffee kettle",
+                                "shower head", "keyboard piano", "case of water bottles", "coat rack", "folded chair",
                                 "fire alarm", "power strip", "calendar", "poster", "luggage"])
-        
+
     NUM_CLASSES = len(VALID_CLASS_IDS)
 
     print('evaluating', len(preds), 'scans...')
@@ -878,6 +1064,7 @@ def evaluate(preds: dict, gt_path: str, output_file: str, dataset: str = "scanne
         matches[matches_key] = {}
         matches[matches_key]['gt'] = gt2pred
         matches[matches_key]['pred'] = pred2gt
+        # print(matches)
         sys.stdout.write("\rscans processed: {}".format(i + 1))
         sys.stdout.flush()
     print('')

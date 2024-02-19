@@ -13,8 +13,9 @@ def main(ctx: DictConfig):
 
     device = "cpu" 
     device = get_free_gpu(min_mem=7000) if torch.cuda.is_available() else device
+    device = "cuda:0"
     print(f"Using device: {device}")
-    
+
     out_folder = ctx.output.output_directory
     
     # convert all paths to absolute paths
@@ -55,7 +56,7 @@ def main(ctx: DictConfig):
 
     # 5. Run extractor
     features_extractor = FeaturesExtractor(camera=camera, 
-                                           clip_model=ctx.external.clip_model, 
+                                           embedding_name=ctx.external.embedding_model, 
                                            images=images, 
                                            masks=masks,
                                            pointcloud=pointcloud, 
@@ -64,7 +65,8 @@ def main(ctx: DictConfig):
                                            vis_threshold=ctx.openmask3d.vis_threshold,
                                            device=device)
     print("[INFO] Computing per-mask CLIP features.")
-    features = features_extractor.extract_features(topk=ctx.openmask3d.top_k, 
+    features = features_extractor.extract_features(preselection=ctx.openmask3d.preselection,
+                                                   topk=ctx.openmask3d.top_k, 
                                                    multi_level_expansion_ratio = ctx.openmask3d.multi_level_expansion_ratio,
                                                    num_levels=ctx.openmask3d.num_of_levels, 
                                                    num_random_rounds=ctx.openmask3d.num_random_rounds,

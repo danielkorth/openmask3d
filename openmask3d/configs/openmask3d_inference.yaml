@@ -4,7 +4,7 @@ data:
   camera:
     poses_path: '../resources/scene_example/pose/'
     intrinsic_path: '../resources/scene_example/intrinsic/intrinsic_color.txt'
-    intrinsic_resolution: [968, 1296]
+    intrinsic_resolution: [1440, 1920]
   depths:
     depths_path: '../resources/scene_example/depth/'
     depths_ext: '.png'
@@ -15,18 +15,19 @@ data:
   point_cloud_path: '../resources/scene_example/scene0011_00_vh_clean_2.ply'
 
 openmask3d:
+  preselection: 5
   top_k: 5
   multi_level_expansion_ratio: 0.1
   num_of_levels: 3
-  vis_threshold: 0.2
-  frequency: 10
+  vis_threshold: 0.1
+  frequency: 1
   num_random_rounds: 10
   num_selected_points: 5
 
 external:
   sam_checkpoint: '../resources/sam_vit_h_4b8939.pth'
   sam_model_type: 'vit_h'
-  clip_model: 'ViT-L/14@336px'
+  embedding_model: "clip"
 
 output:
   experiment_name: 'experiment'

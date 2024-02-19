@@ -1,5 +1,3 @@
-
-import clip
 import numpy as np
 import imageio
 import torch
@@ -7,6 +5,9 @@ from tqdm import tqdm
 import os
 from openmask3d.data.load import Camera, InstanceMasks3D, Images, PointCloud, get_number_of_images
 from openmask3d.mask_features_computation.utils import initialize_sam_model, mask2box_multi_level, run_sam
+from PIL import Image
+import matplotlib.pyplot as plt
+from ..embeddings import CLIPModel, SigLIPModel, DinoV2Model, Embedders
 
 class PointProjector:
     def __init__(self, camera: Camera, 
@@ -41,6 +42,9 @@ class PointProjector:
         print(f"[INFO] Computing the visible points in each view.")
         
         for i, idx in tqdm(enumerate(indices)): # for each view
+            # if i == 10:
+            #     print(intrinsic)
+            #     print(poses[i])
             # *******************************************************************************************************************
             # STEP 1: get the projected points
             # Get the coordinates of the projected points in the i-th view (i.e. the view with index idx)
@@ -98,15 +102,49 @@ class PointProjector:
         self.resolution = resolution
         return visible_points_in_view_in_mask, visible_points_view, projected_points, resolution
     
-    def get_top_k_indices_per_mask(self, k):
+    def get_top_k_indices_per_mask(self, preselection, k):
+        def calculate_angle(R1, R2):
+            # Calculate relative rotation
+            R = np.dot(R1.T, R2)
+            # Ensure trace is within valid range
+            trace = np.clip((np.trace(R) - 1) / 2, -1, 1)
+            # Return angle
+            return np.arccos(trace)
+
+        # Preselect based on visibility
         num_points_in_view_in_mask = self.visible_points_in_view_in_mask.sum(axis=2).sum(axis=2)
-        topk_indices_per_mask = np.argsort(-num_points_in_view_in_mask, axis=0)[:k,:].T
+        preselection_indices_per_mask = np.argsort(-num_points_in_view_in_mask, axis=0)[:preselection,:].T
+
+        # Choose top-k based on most diverse camera angles
+        masks = preselection_indices_per_mask.shape[0]
+        camera_orientations = self.camera.load_poses(self.indices)[:,:3,:3]
+
+        # Calculate pairwise angles for all camera orientations
+        n_orientations = camera_orientations.shape[0]
+        angles = np.zeros((n_orientations, n_orientations))
+        for i in range(n_orientations):
+            for j in range(n_orientations):
+                angles[i,j] = calculate_angle(camera_orientations[i], camera_orientations[j])
+
+        # Choose top-k indices based on most diverse camera angles
+        topk_indices_per_mask = np.zeros((masks, k), dtype=int)
+        for i, indices in tqdm(enumerate(preselection_indices_per_mask)):
+            selected_indices = []
+            selected_indices.append(indices[0])
+            while len(selected_indices) < k:
+                # Calculate min angle to selected poses for each candidate
+                min_angles_to_selected = np.min(angles[indices][:, selected_indices], axis=1)
+                # Select the index with the maximum of these minimum angles
+                next_index = np.argmax(min_angles_to_selected)
+                selected_indices.append(indices[next_index])
+            topk_indices_per_mask[i] = selected_indices
+
         return topk_indices_per_mask
     
 class FeaturesExtractor:
     def __init__(self, 
                  camera, 
-                 clip_model, 
+                 embedding_name: Embedders, 
                  images, 
                  masks,
                  pointcloud,
@@ -119,18 +157,26 @@ class FeaturesExtractor:
         self.device = device
         self.point_projector = PointProjector(camera, pointcloud, masks, vis_threshold, images.indices)
         self.predictor_sam = initialize_sam_model(device, sam_model_type, sam_checkpoint)
-        self.clip_model, self.clip_preprocess = clip.load(clip_model, device)
+
+        if embedding_name == "clip":
+            self.embedding_model = CLIPModel(device)
+        elif embedding_name == "siglip":
+            self.embedding_model = SigLIPModel(device)
+        elif embedding_name == "dinov2":
+            self.embedding_model = DinoV2Model(device)
+        else:
+            raise ValueError("Invalid embedding model name")
         
     
-    def extract_features(self, topk, multi_level_expansion_ratio, num_levels, num_random_rounds, num_selected_points, save_crops, out_folder, optimize_gpu_usage=False):
+    def extract_features(self, preselection, topk, multi_level_expansion_ratio, num_levels, num_random_rounds, num_selected_points, save_crops, out_folder, optimize_gpu_usage=False):
         if(save_crops):
             out_folder = os.path.join(out_folder, "crops")
             os.makedirs(out_folder, exist_ok=True)
                             
-        topk_indices_per_mask = self.point_projector.get_top_k_indices_per_mask(topk)
+        topk_indices_per_mask = self.point_projector.get_top_k_indices_per_mask(preselection, topk)
         
         num_masks = self.point_projector.masks.num_masks
-        mask_clip = np.zeros((num_masks, 768)) #initialize mask clip
+        mask_clip = np.zeros((num_masks, topk, self.embedding_model.dim)) #initialize mask clip
         
         np_images = self.images.get_as_np_list()
         for mask in tqdm(range(num_masks)): # for each mask 
@@ -145,6 +191,15 @@ class FeaturesExtractor:
                 # Get original mask points coordinates in 2d images
                 point_coords = np.transpose(np.where(self.point_projector.visible_points_in_view_in_mask[view][mask] == True))
                 if (point_coords.shape[0] > 0):
+                    
+                    # print(f"Mask: {mask}, View: {view}, View count: {view_count}")
+                    
+                    # # # plot the view
+                    # plt.imshow(np_images[view])
+                    # plt.show()
+
+
+
                     self.predictor_sam.set_image(np_images[view])
                     
                     # SAM
@@ -153,6 +208,13 @@ class FeaturesExtractor:
                                         num_selected_points=num_selected_points,
                                         point_coords=point_coords,
                                         predictor_sam=self.predictor_sam,)
+                    
+                    # save best mask similar to crops below
+                    # show image and mask next to it using subplot
+                    # fig, axs = plt.subplots(1, 2)
+                    # axs[0].imshow(np_images[view])
+                    # axs[1].imshow(best_mask)
+                    # plt.show()
                     
                     # MULTI LEVEL CROPS
                     for level in range(num_levels):
@@ -164,20 +226,22 @@ class FeaturesExtractor:
                             cropped_img.save(os.path.join(out_folder, f"crop{mask}_{view}_{level}.png"))
                             
                         # I compute the CLIP feature using the standard clip model
-                        cropped_img_processed = self.clip_preprocess(cropped_img)
+                        cropped_img_processed = self.embedding_model.preprocess_image(cropped_img)
                         images_crops.append(cropped_img_processed)
             
             if(optimize_gpu_usage):
                 self.predictor_sam.model.cpu()
-                self.clip_model.to(torch.device('cuda'))                
+                # self.clip_model.to(torch.device('cuda'))                
             if(len(images_crops) > 0):
-                image_input = torch.tensor(np.stack(images_crops))
+                if isinstance(self.embedding_model, DinoV2Model):
+                    image_input = {k: torch.tensor(np.stack([img[k] for img in images_crops])) for k in images_crops[0].keys()}
+                else:
+                    image_input = torch.tensor(np.stack(images_crops))
                 with torch.no_grad():
-                    image_features = self.clip_model.encode_image(image_input.to(self.device)).float()
-                    image_features /= image_features.norm(dim=-1, keepdim=True) #normalize
+                    image_features = self.embedding_model.encode_image(image_input).float()
                 
-                mask_clip[mask] = image_features.mean(axis=0).cpu().numpy()
+                avg_feature_per_image = image_features.view(-1, num_levels, self.embedding_model.dim).mean(dim=1)
+                num_images = avg_feature_per_image.shape[0]
+                mask_clip[mask][:num_images] = avg_feature_per_image.cpu().numpy()
                     
         return mask_clip
-        
-    

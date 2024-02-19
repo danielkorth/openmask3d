@@ -1,0 +1,59 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: compute_features_single_scene",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/ml3d/openmask3d_daniel/openmask3d/compute_features_single_scene.py",
+            "args": [
+                "data.masks.masks_path=/home/ml3d/openmask3d_daniel/output/2024-02-05-10-51-50-experiment/scene_example_masks.pt",
+                "data.camera.poses_path=/home/ml3d/openmask3d/resources/41b00feddb_downsampled_3_images/pose",
+                "data.camera.intrinsic_path=/home/ml3d/openmask3d/resources/41b00feddb_downsampled_3_images/intrinsic/intrinsic_color.txt",
+                "data.camera.intrinsic_resolution=[1440,1920]",
+                "data.depths.depths_path=/home/ml3d/openmask3d/resources/41b00feddb_downsampled_3_images/depth",
+                "data.depths.depth_scale=1000",
+                "data.depths.depths_ext=.png",
+                "data.images.images_path=/home/ml3d/openmask3d/resources/41b00feddb_downsampled_3_images/color",
+                "data.images.images_ext=.jpg",
+                "data.point_cloud_path=/home/ml3d/openmask3d/resources/41b00feddb_downsampled_3_images/scene_example.ply",
+                "output.output_directory=/home/ml3d/openmask3d_daniel/output/debug",
+                "output.save_crops=true",
+                "hydra.run.dir=/home/ml3d/openmask3d_daniel/output/debug/hydra_outputs/mask_features_computation",
+                "external.sam_checkpoint=/home/ml3d/openmask3d/resources/sam_vit_h_4b8939.pth",
+                "gpu.optimize_gpu_usage=false"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Evaluate 3D Semantic Instance Segmentation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/openmask3d/evaluation/run_eval_close_vocab_inst_seg.py",
+            "args": [
+                "--gt_dir=/home/scannet/instance_gt",
+                "--pred_dir=/home/ml3d/openmask3d/output/2024-02-06-15-24-18-experiments",
+                "--embedding_name=clip",
+                "--scene_list_file=/home/ml3d/openmask3d/selected_scenes.txt",
+                "--output_dir=/home/ml3d/openmask3d/output/2024-02-06-15-24-18-experiments/evaluation",
+                "--agg_fct=mean",
+                "--remove_outliers=false"
+            ],
+        },
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "openmask3d/visualization/viz_sim_score_export.py",
+            "args": [
+                "-e=/home/ml3d/openmask3d_daniel/output/2024-02-06-22-51-53-experiments/c50d2d1d42",
+                "-t='a chair'",
+                "--agg_fct=max",
+                "--remove_outliers=true"
+            ],
+        }
+    ]
+}
